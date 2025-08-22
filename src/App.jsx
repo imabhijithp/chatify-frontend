@@ -165,6 +165,8 @@ const ChatScreen = ({ currentUser, isBlurred }) => {
             avatar: currentUser.avatar
         }
     };
+    // **DEBUG LOG ADDED HERE**
+    console.log("Sending message:", newMessage);
     setMessages(prev => [...prev, newMessage]);
     socket.emit('sendMessage', { chatId: CHAT_ID, message: newMessage });
   };
