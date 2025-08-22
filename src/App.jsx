@@ -1,25 +1,94 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sun, Moon, Search, Paperclip, Mic, Send, Check, CheckCheck, UserPlus, MessageSquarePlus } from 'lucide-react';
+import { Sun, Moon, Search, Paperclip, Mic, Send, Check, CheckCheck, UserPlus, MessageSquarePlus, LogIn } from 'lucide-react';
 import { io } from 'socket.io-client';
 
 // --- Configuration ---
 const API_URL = 'https://chatify-backend-jpl8.onrender.com';
-const socket = io(API_URL);
+const socket = io(API_URL, { autoConnect: false });
 
-// --- Helper function to get or create a unique user ID for the session ---
-const getSessionUserId = () => {
-    let userId = sessionStorage.getItem('chatify-userId');
-    if (!userId) {
-        userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        sessionStorage.setItem('chatify-userId', userId);
+// --- Helper function to get user from localStorage ---
+const getStoredUser = () => {
+    try {
+        const user = localStorage.getItem('chatify-user');
+        return user ? JSON.parse(user) : null;
+    } catch (error) {
+        return null;
     }
-    return userId;
+};
+
+// --- Main App Component (Acts as a router) ---
+export default function App() {
+    const [user, setUser] = useState(getStoredUser());
+
+    const handleLogin = (username) => {
+        const newUser = {
+            id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            name: username
+        };
+        localStorage.setItem('chatify-user', JSON.stringify(newUser));
+        setUser(newUser);
+    };
+
+    useEffect(() => {
+        if (user) {
+            socket.connect();
+        }
+        return () => {
+            if (socket.connected) {
+                socket.disconnect();
+            }
+        };
+    }, [user]);
+
+    if (!user) {
+        return <LoginScreen onLogin={handleLogin} />;
+    }
+
+    return <ChatApp currentUser={user} />;
+}
+
+
+// --- Login Screen Component ---
+const LoginScreen = ({ onLogin }) => {
+    const [username, setUsername] = useState('');
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (username.trim()) {
+            onLogin(username.trim());
+        }
+    };
+
+    return (
+        <div className="flex h-screen items-center justify-center bg-slate-100 dark:bg-slate-900">
+            <div className="w-full max-w-sm p-8 space-y-6 bg-white dark:bg-slate-800 rounded-2xl shadow-lg">
+                <div className="text-center">
+                    <MessageSquarePlus size={48} className="mx-auto text-blue-500" />
+                    <h1 className="mt-4 text-3xl font-bold text-slate-800 dark:text-white">Welcome to Chatify</h1>
+                    <p className="mt-2 text-slate-500 dark:text-slate-400">Enter your name to start chatting</p>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Your Name"
+                        className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                    />
+                    <button type="submit" className="w-full flex justify-center items-center gap-2 px-4 py-2 font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800">
+                        <LogIn size={18} />
+                        Join Chat
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
 };
 
 
-// --- Main App Component ---
-export default function App() {
-  const [currentUserId] = useState(getSessionUserId());
+// --- Main Chat Application Component ---
+const ChatApp = ({ currentUser }) => {
   const [activeChatId, setActiveChatId] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
   
@@ -28,7 +97,6 @@ export default function App() {
   const [users, setUsers] = useState({});
   const [typingChats, setTypingChats] = useState(new Set());
 
-  // --- Initial Data Fetching ---
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -36,13 +104,13 @@ export default function App() {
           fetch(`${API_URL}/api/users`),
           fetch(`${API_URL}/api/chats`),
         ]);
-        const usersData = await usersRes.json();
+        let usersData = await usersRes.json();
         const chatsData = await chatsRes.json();
         
-        // Dynamically set 'You' based on the session's user ID
+        // Replace generic 'user1' with the current logged-in user
         if (usersData['user1']) {
-            usersData[currentUserId] = { ...usersData['user1'], name: 'You' };
-            delete usersData['user1']; // Remove the generic user1
+            usersData[currentUser.id] = { ...usersData['user1'], name: currentUser.name };
+            delete usersData['user1'];
         }
         
         setUsers(usersData);
@@ -56,20 +124,12 @@ export default function App() {
       }
     };
     fetchData();
-  }, [currentUserId]);
+  }, [currentUser]);
 
-  // --- Socket.IO Event Listeners ---
   useEffect(() => {
-    socket.on('connect', () => console.log('Connected to WebSocket server'));
-
     socket.on('newMessage', (newMessage) => {
-        // Ignore messages sent by the current user session
-        if (newMessage.senderId === currentUserId) return;
-
-        setMessages(prevMessages => ({
-            ...prevMessages,
-            [newMessage.chatId]: [...(prevMessages[newMessage.chatId] || []), newMessage]
-        }));
+        if (newMessage.senderId === currentUser.id) return;
+        setMessages(prev => ({ ...prev, [newMessage.chatId]: [...(prev[newMessage.chatId] || []), newMessage] }));
     });
 
     socket.on('typing', ({ chatId, isTyping }) => {
@@ -82,13 +142,11 @@ export default function App() {
     });
 
     return () => {
-        socket.off('connect');
         socket.off('newMessage');
         socket.off('typing');
     };
-  }, [currentUserId]);
+  }, [currentUser.id]);
 
-  // --- Fetch Messages for Active Chat ---
   useEffect(() => {
     if (!activeChatId) return;
     socket.emit('joinRoom', activeChatId);
@@ -98,15 +156,12 @@ export default function App() {
                 const res = await fetch(`${API_URL}/api/messages/${activeChatId}`);
                 const data = await res.json();
                 setMessages(prev => ({ ...prev, [activeChatId]: data }));
-            } catch (error) {
-                console.error(`Failed to fetch messages for chat ${activeChatId}:`, error);
-            }
+            } catch (error) { console.error(`Failed to fetch messages for chat ${activeChatId}:`, error); }
         }
     };
     fetchMessages();
   }, [activeChatId]);
 
-  // --- Dark Mode ---
   useEffect(() => {
     if (darkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
@@ -117,39 +172,29 @@ export default function App() {
     const newMessage = {
         id: `msg_${Date.now()}`,
         chatId: activeChatId,
-        senderId: currentUserId, // Use the unique session user ID
+        senderId: currentUser.id,
         content,
         timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
         status: 'sent'
     };
-    setMessages(prev => ({
-        ...prev,
-        [activeChatId]: [...(prev[activeChatId] || []), newMessage]
-    }));
+    setMessages(prev => ({ ...prev, [activeChatId]: [...(prev[activeChatId] || []), newMessage] }));
     socket.emit('sendMessage', { chatId: activeChatId, message: newMessage });
   };
 
   const activeChat = chats.find(c => c.id === activeChatId);
-  const otherUser = activeChat ? users[activeChat.members.find(m => m !== 'user1' && m !== currentUserId)] : null;
+  const otherUser = activeChat ? users[activeChat.members.find(m => m !== 'user1' && m !== currentUser.id)] : null;
 
   return (
     <div className={`flex h-screen font-sans bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300`}>
-      <Sidebar chats={chats} users={users} currentUserId={currentUserId} activeChatId={activeChatId} setActiveChatId={setActiveChatId} typingChats={typingChats} />
+      <Sidebar chats={chats} users={users} currentUserId={currentUser.id} activeChatId={activeChatId} setActiveChatId={setActiveChatId} typingChats={typingChats} />
       <main className="flex-1 flex flex-col min-w-0">
         {activeChat && otherUser ? (
           <>
             <ChatHeader user={otherUser} darkMode={darkMode} toggleDarkMode={() => setDarkMode(!darkMode)} />
-            <ChatWindow 
-                messages={messages[activeChatId] || []} 
-                users={users} 
-                currentUserId={currentUserId}
-                typing={typingChats.has(activeChatId)} 
-            />
+            <ChatWindow messages={messages[activeChatId] || []} users={users} currentUserId={currentUser.id} typing={typingChats.has(activeChatId)} />
             <MessageInput onSendMessage={handleSendMessage} chatId={activeChatId} />
           </>
-        ) : (
-           <WelcomeScreen />
-        )}
+        ) : ( <WelcomeScreen /> )}
       </main>
     </div>
   );
@@ -165,9 +210,7 @@ const MessageInput = ({ onSendMessage, chatId }) => {
     setInputValue(e.target.value);
     if(typingTimeoutRef.current === null) {
         socket.emit('typing', { chatId, isTyping: true });
-    } else {
-        clearTimeout(typingTimeoutRef.current);
-    }
+    } else { clearTimeout(typingTimeoutRef.current); }
     typingTimeoutRef.current = setTimeout(() => {
         socket.emit('typing', { chatId, isTyping: false });
         typingTimeoutRef.current = null;
@@ -279,7 +322,12 @@ const ChatWindow = ({ messages, users, currentUserId, typing }) => {
 const MessageBubble = ({ message, users, currentUserId }) => {
     const isSent = message.senderId === currentUserId;
     const sender = users[message.senderId];
-    if (!sender) return null;
+    if (!sender && isSent) {
+      // If sender is not in users map but it's the current user, create a temporary user object
+      users[currentUserId] = { name: 'You', avatar: 'https://placehold.co/100x100/3B82F6/FFFFFF?text=You' };
+    } else if (!sender) {
+      return null;
+    }
   
     const ReadReceipt = () => {
       if (message.status === 'seen') return <CheckCheck size={16} className="text-blue-400" />;
@@ -289,7 +337,7 @@ const MessageBubble = ({ message, users, currentUserId }) => {
   
     return (
       <div className={`flex items-end gap-2 ${isSent ? 'justify-end' : ''}`}>
-        {!isSent && <img src={sender.avatar} alt="" className="w-8 h-8 rounded-full self-start"/>}
+        {!isSent && <img src={users[message.senderId]?.avatar} alt="" className="w-8 h-8 rounded-full self-start"/>}
         <div className={`max-w-md p-3 rounded-2xl ${isSent ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-md'}`}>
           <p className="text-sm">{message.content}</p>
           <div className={`flex items-center gap-1.5 text-xs mt-1 ${isSent ? 'text-blue-200 justify-end' : 'text-slate-400 justify-start'}`}>
