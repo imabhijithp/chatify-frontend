@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sun, Moon, Paperclip, Mic, Send, LogIn, MessageSquarePlus, Users } from 'lucide-react';
+import { Sun, Moon, Paperclip, Mic, Send, LogIn, MessageSquarePlus, Users, ShieldAlert } from 'lucide-react';
 import { io } from 'socket.io-client';
 
 // --- Configuration ---
 const API_URL = 'https://chatify-backend-jpl8.onrender.com';
 const CHAT_ID = 'global_chatroom';
+const REQUIRED_PIN = '3672'; // The required PIN for login
 const socket = io(API_URL, { autoConnect: false });
 
 // --- Helper function to get user from localStorage ---
@@ -56,21 +57,29 @@ export default function App() {
 // --- Login Modal Component ---
 const LoginModal = ({ onLogin }) => {
     const [username, setUsername] = useState('');
+    const [pin, setPin] = useState('');
+    const [error, setError] = useState('');
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (username.trim()) {
-            onLogin(username.trim());
+        if (pin === REQUIRED_PIN) {
+            if (username.trim()) {
+                onLogin(username.trim());
+            }
+        } else {
+            setError('Incorrect PIN. Please try again.');
+            // Clear the pin field after a short delay
+            setTimeout(() => setPin(''), 1000);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm transition-opacity duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm transition-opacity duration-300 p-4">
             <div className="w-full max-w-sm p-8 space-y-6 bg-white dark:bg-slate-800 rounded-2xl shadow-lg transform transition-all duration-300 scale-95 opacity-0 animate-fade-in-scale">
                 <div className="text-center">
                     <MessageSquarePlus size={48} className="mx-auto text-blue-500" />
-                    <h1 className="mt-4 text-3xl font-bold text-slate-800 dark:text-white">Welcome to Chatify</h1>
-                    <p className="mt-2 text-slate-500 dark:text-slate-400">Enter your name to join the chat</p>
+                    <h1 className="mt-4 text-3xl font-bold text-slate-800 dark:text-white">Internal Chat</h1>
+                    <p className="mt-2 text-slate-500 dark:text-slate-400">Enter your name and PIN to join</p>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <input
@@ -81,6 +90,23 @@ const LoginModal = ({ onLogin }) => {
                         className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                     />
+                    <input
+                        type="password"
+                        value={pin}
+                        onChange={(e) => setPin(e.target.value)}
+                        placeholder="4-Digit PIN"
+                        maxLength="4"
+                        pattern="\d{4}"
+                        inputMode="numeric"
+                        className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                    />
+                    {error && (
+                        <div className="flex items-center gap-2 text-sm text-red-500 animate-shake">
+                            <ShieldAlert size={16} />
+                            <span>{error}</span>
+                        </div>
+                    )}
                     <button type="submit" className="w-full flex justify-center items-center gap-2 px-4 py-3 font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 transition-colors">
                         <LogIn size={18} />
                         Join Chat
@@ -94,6 +120,14 @@ const LoginModal = ({ onLogin }) => {
                 }
                 .animate-fade-in-scale {
                     animation: fade-in-scale 0.3s forwards cubic-bezier(0.16, 1, 0.3, 1);
+                }
+                @keyframes shake {
+                    0%, 100% { transform: translateX(0); }
+                    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+                    20%, 40%, 60%, 80% { transform: translateX(5px); }
+                }
+                .animate-shake {
+                    animation: shake 0.5s ease-in-out;
                 }
             `}</style>
         </div>
@@ -165,8 +199,6 @@ const ChatScreen = ({ currentUser, isBlurred }) => {
             avatar: currentUser.avatar
         }
     };
-    // **DEBUG LOG ADDED HERE**
-    console.log("Sending message:", newMessage);
     setMessages(prev => [...prev, newMessage]);
     socket.emit('sendMessage', { chatId: CHAT_ID, message: newMessage });
   };
@@ -212,7 +244,7 @@ const ChatWindow = ({ messages, currentUserId, typingUsers }) => {
     }, [messages, typingUsers]);
   
     return (
-      <div className="flex-1 overflow-y-auto p-6 bg-slate-200/50 dark:bg-slate-900/50" style={{backgroundImage: `url("data:image/svg+xml,%3Csvg width='52' height='26' viewBox='0 0 52 26' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2394a3b8' fill-opacity='0.1'%3E%3Cpath d='M10 10c0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6h2c0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4v2c-3.314 0-6-2.686-6-6 0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6zm25.464-1.95l8.486 8.486-1.414 1.414-8.486-8.486 1.414-1.414z' /%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`}}>
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/50 dark:bg-slate-900/50" style={{backgroundImage: `url("data:image/svg+xml,%3Csvg width='52' height='26' viewBox='0 0 52 26' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2394a3b8' fill-opacity='0.1'%3E%3Cpath d='M10 10c0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6h2c0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4v2c-3.314 0-6-2.686-6-6 0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6zm25.464-1.95l8.486 8.486-1.414 1.414-8.486-8.486 1.414-1.414z' /%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`}}>
         <div className="max-w-4xl mx-auto space-y-2">
           {messages.map(msg => (<MessageBubble key={msg.id} message={msg} isSent={msg.sender.id === currentUserId} />))}
           {typingUsers.map(user => (<TypingIndicator key={user.id} user={user} />))}
@@ -227,11 +259,11 @@ const MessageBubble = ({ message, isSent }) => {
     if (!sender) return null;
   
     return (
-      <div className={`flex items-end gap-3 ${isSent ? 'justify-end' : ''} group animate-fade-in`}>
+      <div className={`flex items-end gap-2 sm:gap-3 ${isSent ? 'justify-end' : ''} group animate-fade-in`}>
         {!isSent && <img src={sender.avatar} alt={sender.name} className="w-8 h-8 rounded-full self-start shadow-sm"/>}
-        <div className={`max-w-lg p-3 rounded-2xl shadow-md ${isSent ? 'bg-blue-500 text-white rounded-br-lg' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-lg'}`}>
+        <div className={`max-w-[75%] sm:max-w-[70%] md:max-w-lg p-3 rounded-2xl shadow-md ${isSent ? 'bg-blue-500 text-white rounded-br-lg' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-lg'}`}>
           {!isSent && <p className="text-xs font-semibold text-blue-500 mb-1">{sender.name}</p>}
-          <p className="text-sm leading-relaxed">{message.content}</p>
+          <p className="text-sm leading-relaxed break-words">{message.content}</p>
           <div className={`text-xs mt-1.5 ${isSent ? 'text-blue-200 text-right' : 'text-slate-400 text-left'}`}>
             <span>{message.timestamp}</span>
           </div>
@@ -252,7 +284,7 @@ const MessageBubble = ({ message, isSent }) => {
 const TypingIndicator = ({ user }) => {
     if (!user) return null;
     return (
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-2 sm:gap-3">
             <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full self-start"/>
             <div className="p-3 rounded-2xl bg-white dark:bg-slate-800 rounded-bl-lg shadow-md">
                 <div className="flex items-center space-x-1.5">
@@ -292,12 +324,12 @@ const MessageInput = ({ onSendMessage }) => {
   };
 
   return (
-    <footer className="flex-shrink-0 p-4 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800">
-      <form onSubmit={handleSubmit} className="max-w-4xl mx-auto flex items-center gap-3">
+    <footer className="flex-shrink-0 p-2 sm:p-4 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800">
+      <form onSubmit={handleSubmit} className="max-w-4xl mx-auto flex items-center gap-2 sm:gap-3">
         <button type="button" className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Paperclip size={22} className="text-slate-500" /></button>
-        <input type="text" value={inputValue} onChange={handleTyping} placeholder="Type a message..." className="flex-1 bg-slate-100 dark:bg-slate-800 border-transparent rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <button type="button" className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Mic size={22} className="text-slate-500" /></button>
-        <button type="submit" className="bg-blue-500 text-white rounded-full p-3.5 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-950 transition-colors shadow-lg">
+        <input type="text" value={inputValue} onChange={handleTyping} placeholder="Type a message..." className="flex-1 bg-slate-100 dark:bg-slate-800 border-transparent rounded-full px-4 sm:px-5 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button type="button" className="hidden sm:block p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><Mic size={22} className="text-slate-500" /></button>
+        <button type="submit" className="bg-blue-500 text-white rounded-full p-3 sm:p-3.5 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-950 transition-colors shadow-lg">
             <Send size={20} />
         </button>
       </form>
