@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sun, Moon, Search, Paperclip, Mic, Send, Check, CheckCheck, UserPlus, MessageSquarePlus, TestTube } from 'lucide-react';
+import { Sun, Moon, Search, Paperclip, Mic, Send, Check, CheckCheck, UserPlus, MessageSquarePlus } from 'lucide-react';
 import { io } from 'socket.io-client';
 
 // --- Configuration ---
@@ -205,7 +205,7 @@ const MessageInput = ({ onSendMessage, chatId }) => {
 
 const Sidebar = ({ chats, users, activeChatId, setActiveChatId, typingChats }) => {
     return (
-      <aside className="w-full sm:w-80 md:w-96 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-950">
+      <aside className="w-[350px] flex-shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-950">
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-950 z-10">
           <h2 className="text-xl font-bold text-blue-500">Chats</h2>
           <button className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
