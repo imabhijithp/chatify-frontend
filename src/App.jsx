@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sun, Moon, Search, Paperclip, Mic, Send, Check, CheckCheck, UserPlus, MessageSquarePlus } from 'lucide-react';
+import { Sun, Moon, Search, Paperclip, Mic, Send, Check, CheckCheck, UserPlus, MessageSquarePlus, TestTube } from 'lucide-react';
 import { io } from 'socket.io-client';
 
 // --- Configuration ---
