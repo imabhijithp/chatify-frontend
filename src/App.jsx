@@ -336,3 +336,4 @@ const MessageInput = ({ onSendMessage }) => {
     </footer>
   );
 };
+/*test*/
